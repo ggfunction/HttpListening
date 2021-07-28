@@ -29,7 +29,7 @@ namespace HttpListening
             this.ContentRoot = System.IO.Directory.Exists(contentRoot) ?
                 contentRoot : Environment.CurrentDirectory;
 
-            this.Port = port != 0 ? port : this.GetFreePort();
+            this.Port = port >= 0 ? port : this.GetFreePort();
 
             this.httpListener = new HttpListener();
             this.httpListener.Prefixes.Add(string.Format("http://localhost:{0}/", this.Port));
@@ -104,7 +104,8 @@ namespace HttpListening
                 throw new ArgumentNullException("mimeType");
             }
 
-            throw new NotImplementedException();
+            /* throw new NotImplementedException(); */
+            return true;
         }
 
         private HashSet<string> LoadMimeTypes()
@@ -160,21 +161,26 @@ namespace HttpListening
                             continue;
                         }
 
-                        var contentPath = System.IO.Path.Combine(
-                            this.ContentRoot,
-                            request.RawUrl.TrimStart('/').Replace('/', System.IO.Path.DirectorySeparatorChar));
+                        string contentPath;
 
-                        if (System.IO.File.Exists(contentPath))
-                        {
-                            var bytes = System.IO.File.ReadAllBytes(contentPath);
-                            response.ContentLength64 = bytes.Length;
-                            response.OutputStream.Write(bytes, 0, bytes.Length);
-                            response.StatusCode = (int)HttpStatusCode.OK;
-                        }
-                        else
+                        if (!this.TryResolvePath(request.RawUrl, out contentPath))
                         {
                             response.StatusCode = (int)HttpStatusCode.NotFound;
+                            continue;
                         }
+
+                        var mimeType = MimeTypes.GetMimeType(contentPath);
+
+                        if (!this.HasPermissions(mimeType))
+                        {
+                            response.StatusCode = (int)HttpStatusCode.Forbidden;
+                            continue;
+                        }
+
+                        var bytes = System.IO.File.ReadAllBytes(contentPath);
+                        response.ContentLength64 = bytes.Length;
+                        response.OutputStream.Write(bytes, 0, bytes.Length);
+                        response.StatusCode = (int)HttpStatusCode.OK;
                     }
                 }
                 catch (ObjectDisposedException)
