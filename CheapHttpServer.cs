@@ -40,7 +40,7 @@ namespace HttpListening
 
             this.DirectoryIndex = new string[]
             {
-                "index.html", "index.htm", "default.html", "default.htm", "content/index.html",
+                "index.html", "index.htm", "default.html", "default.htm", /* "content/index.html", */
             };
 
             this.PermittedMimeTypes = this.LoadMimeTypes();
@@ -104,8 +104,7 @@ namespace HttpListening
                 throw new ArgumentNullException("mimeType");
             }
 
-            /* throw new NotImplementedException(); */
-            return true;
+            return this.PermittedMimeTypes.Contains(mimeType);
         }
 
         private HashSet<string> LoadMimeTypes()
@@ -142,13 +141,38 @@ namespace HttpListening
                 return true;
             }
 
-            return false;
+            if (requestPath.EndsWith("/") && System.IO.Directory.Exists(test))
+            {
+                test = this.DirectoryIndex
+                    .Select(x => x.TrimStart('/'))
+                    .Select(x => x.IndexOf('/') == -1 ?
+                        System.IO.Path.Combine(test, x) :
+                        System.IO.Path.Combine(this.ContentRoot, x.Replace('/', System.IO.Path.DirectorySeparatorChar)))
+                    .FirstOrDefault(x => System.IO.File.Exists(x));
+                contentPath = test;
+                result = !string.IsNullOrEmpty(test);
+            }
+
+            return result;
         }
 
         private void WaitCallback(object data)
         {
-            while (!this.waitToQuit.WaitOne(0))
+            var waitHandles = new WaitHandle[]
             {
+                this.waitToQuit,
+                this.keepOnListening,
+            };
+
+            while (true)
+            {
+                var index = WaitHandle.WaitAny(waitHandles);
+
+                if (index == Array.IndexOf(waitHandles, this.waitToQuit))
+                {
+                    break;
+                }
+
                 try
                 {
                     var context = this.httpListener.GetContext();
@@ -161,11 +185,19 @@ namespace HttpListening
                             continue;
                         }
 
+                        if (request.HttpMethod != "GET" && request.HttpMethod != "HEAD")
+                        {
+                            response.StatusCode = (int)HttpStatusCode.NotImplemented;
+                            continue;
+                        }
+
                         string contentPath;
 
                         if (!this.TryResolvePath(request.RawUrl, out contentPath))
                         {
-                            response.StatusCode = (int)HttpStatusCode.NotFound;
+                            response.StatusCode = request.RawUrl.EndsWith('/') ?
+                                (int)HttpStatusCode.Forbidden :
+                                (int)HttpStatusCode.NotFound;
                             continue;
                         }
 
