@@ -9,7 +9,7 @@ Get-ChildItem |
 $addTypeParams = @{
     TypeDefinition = $source.ToString()
     Language = 'CSharpVersion3'
-    ReferencedAssemblies = 'System.Windows.Forms', 'System.Drawing'
+    ReferencedAssemblies = 'System.Windows.Forms', 'System.Drawing', 'System.Web'
 }
 
 Add-Type @addTypeParams

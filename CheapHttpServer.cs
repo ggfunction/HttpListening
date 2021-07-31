@@ -167,6 +167,7 @@ namespace HttpListening
 
         private bool TryResolvePath(string requestPath, out string contentPath)
         {
+            requestPath = System.Web.HttpUtility.UrlDecode(requestPath);
             contentPath = string.Empty;
 
             var test = System.IO.Path.Combine(
