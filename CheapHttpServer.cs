@@ -14,6 +14,8 @@ namespace HttpListening
 
         private readonly EventWaitHandle waitToQuit;
 
+        private int concurrentRequests;
+
         public CheapHttpServer()
             : this(Environment.CurrentDirectory, 8080)
         {
@@ -38,9 +40,11 @@ namespace HttpListening
             this.keepOnListening = new EventWaitHandle(false, EventResetMode.ManualReset);
             this.waitToQuit = new EventWaitHandle(false, EventResetMode.AutoReset);
 
-            this.DirectoryIndex = new string[]
+            this.ConcurrentRequests = Environment.ProcessorCount;
+
+            this.DirectoryIndex = new HashSet<string>
             {
-                "index.html", "index.htm", "default.html", "default.htm", /* "content/index.html", */
+                "index.html", "index.htm", "default.html", "default.htm", "/content/index.html",
             };
 
             this.PermittedMimeTypes = this.LoadMimeTypes();
@@ -50,7 +54,20 @@ namespace HttpListening
 
         public string ContentRoot { get; private set; }
 
-        public string[] DirectoryIndex { get; private set; }
+        public int ConcurrentRequests
+        {
+            get
+            {
+                return this.concurrentRequests;
+            }
+
+            set
+            {
+                this.concurrentRequests = Math.Min(Math.Max(1, value), Environment.ProcessorCount);
+            }
+        }
+
+        public HashSet<string> DirectoryIndex { get; private set; }
 
         public bool IsListening
         {
@@ -81,6 +98,28 @@ namespace HttpListening
         public void Stop()
         {
             this.keepOnListening.Reset();
+        }
+
+        private void ListenerCallback(IAsyncResult ar)
+        {
+            var listener = ar.AsyncState as HttpListener;
+
+            try
+            {
+                var context = listener.EndGetContext(ar);
+                var request = context.Request;
+                using (var response = context.Response)
+                {
+                }
+            }
+            catch (ObjectDisposedException)
+            {
+            }
+            catch (HttpListenerException)
+            {
+            }
+
+            throw new NotImplementedException();
         }
 
         private int GetFreePort()
@@ -144,10 +183,9 @@ namespace HttpListening
             if (requestPath.EndsWith("/") && System.IO.Directory.Exists(test))
             {
                 test = this.DirectoryIndex
-                    .Select(x => x.TrimStart('/'))
-                    .Select(x => x.IndexOf('/') == -1 ?
-                        System.IO.Path.Combine(test, x) :
-                        System.IO.Path.Combine(this.ContentRoot, x.Replace('/', System.IO.Path.DirectorySeparatorChar)))
+                    .Select(x => x.IndexOf('/') == 0 ?
+                        System.IO.Path.Combine(this.ContentRoot, x.TrimStart('/').Replace('/', System.IO.Path.DirectorySeparatorChar)) :
+                        System.IO.Path.Combine(test, x.Replace('/', System.IO.Path.DirectorySeparatorChar)))
                     .FirstOrDefault(x => System.IO.File.Exists(x));
                 contentPath = test;
                 result = !string.IsNullOrEmpty(test);
@@ -195,7 +233,7 @@ namespace HttpListening
 
                         if (!this.TryResolvePath(request.RawUrl, out contentPath))
                         {
-                            response.StatusCode = request.RawUrl.EndsWith('/') ?
+                            response.StatusCode = request.RawUrl.EndsWith("/") ?
                                 (int)HttpStatusCode.Forbidden :
                                 (int)HttpStatusCode.NotFound;
                             continue;
