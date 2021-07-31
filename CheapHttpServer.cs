@@ -31,7 +31,7 @@ namespace HttpListening
             this.ContentRoot = System.IO.Directory.Exists(contentRoot) ?
                 contentRoot : Environment.CurrentDirectory;
 
-            this.Port = port >= 0 ? port : this.GetFreePort();
+            this.Port = port > 0 ? port : this.GetFreePort();
 
             this.httpListener = new HttpListener();
             this.httpListener.Prefixes.Add(string.Format("http://localhost:{0}/", this.Port));
