@@ -10,7 +10,7 @@ namespace HttpListening
     {
         private readonly HttpListener httpListener;
 
-        private readonly EventWaitHandle keepOnListening;
+        private readonly EventWaitHandle waitToListen;
 
         private readonly EventWaitHandle waitToQuit;
 
@@ -37,7 +37,7 @@ namespace HttpListening
             this.httpListener.Prefixes.Add(string.Format("http://localhost:{0}/", this.Port));
             this.httpListener.Start();
 
-            this.keepOnListening = new EventWaitHandle(false, EventResetMode.ManualReset);
+            this.waitToListen = new EventWaitHandle(true, EventResetMode.ManualReset);
             this.waitToQuit = new EventWaitHandle(false, EventResetMode.AutoReset);
 
             this.ConcurrentRequests = Environment.ProcessorCount;
@@ -71,7 +71,7 @@ namespace HttpListening
 
         public bool IsListening
         {
-            get { return this.keepOnListening.WaitOne(0); }
+            get { return !this.waitToListen.WaitOne(0); }
         }
 
         public int Port { get; private set; }
@@ -92,12 +92,12 @@ namespace HttpListening
 
         public void Start()
         {
-            this.keepOnListening.Set();
+            this.waitToListen.Reset();
         }
 
         public void Stop()
         {
-            this.keepOnListening.Reset();
+            this.waitToListen.Set();
         }
 
         private void ListenerCallback(IAsyncResult ar)
@@ -108,8 +108,51 @@ namespace HttpListening
             {
                 var context = listener.EndGetContext(ar);
                 var request = context.Request;
-                using (var response = context.Response)
+                var response = context.Response;
+
+                try
                 {
+                    if (!this.IsListening)
+                    {
+                        response.StatusCode = (int)HttpStatusCode.InternalServerError;
+                        return;
+                    }
+
+                    if (request.HttpMethod != "GET" && request.HttpMethod != "HEAD")
+                    {
+                        response.StatusCode = (int)HttpStatusCode.NotImplemented;
+                        return;
+                    }
+
+                    string contentPath;
+
+                    if (!this.TryResolvePath(request.RawUrl, out contentPath))
+                    {
+                        response.StatusCode = request.RawUrl.EndsWith("/") ?
+                            (int)HttpStatusCode.Forbidden :
+                            (int)HttpStatusCode.NotFound;
+                        return;
+                    }
+
+                    var mimeType = MimeTypes.GetMimeType(contentPath);
+
+                    if (!this.HasPermissions(mimeType))
+                    {
+                        response.StatusCode = (int)HttpStatusCode.Forbidden;
+                        return;
+                    }
+
+                    var bytes = System.IO.File.ReadAllBytes(contentPath);
+                    response.ContentLength64 = bytes.Length;
+                    response.OutputStream.Write(bytes, 0, bytes.Length);
+                    response.StatusCode = (int)HttpStatusCode.OK;
+                }
+                catch (System.IO.IOException)
+                {
+                }
+                finally
+                {
+                    response.Close();
                 }
             }
             catch (ObjectDisposedException)
@@ -118,8 +161,6 @@ namespace HttpListening
             catch (HttpListenerException)
             {
             }
-
-            throw new NotImplementedException();
         }
 
         private int GetFreePort()
@@ -200,65 +241,59 @@ namespace HttpListening
             var waitHandles = new WaitHandle[]
             {
                 this.waitToQuit,
-                this.keepOnListening,
+                this.waitToListen,
             };
 
-            while (true)
+            var requests = new List<WaitHandle>();
+
+            for (var i = 0; i < this.ConcurrentRequests; i++)
             {
-                var index = WaitHandle.WaitAny(waitHandles);
-
-                if (index == Array.IndexOf(waitHandles, this.waitToQuit))
-                {
-                    break;
-                }
-
                 try
                 {
-                    var context = this.httpListener.GetContext();
-                    var request = context.Request;
-                    using (var response = context.Response)
-                    {
-                        if (!this.IsListening)
-                        {
-                            response.StatusCode = (int)HttpStatusCode.InternalServerError;
-                            continue;
-                        }
-
-                        if (request.HttpMethod != "GET" && request.HttpMethod != "HEAD")
-                        {
-                            response.StatusCode = (int)HttpStatusCode.NotImplemented;
-                            continue;
-                        }
-
-                        string contentPath;
-
-                        if (!this.TryResolvePath(request.RawUrl, out contentPath))
-                        {
-                            response.StatusCode = request.RawUrl.EndsWith("/") ?
-                                (int)HttpStatusCode.Forbidden :
-                                (int)HttpStatusCode.NotFound;
-                            continue;
-                        }
-
-                        var mimeType = MimeTypes.GetMimeType(contentPath);
-
-                        if (!this.HasPermissions(mimeType))
-                        {
-                            response.StatusCode = (int)HttpStatusCode.Forbidden;
-                            continue;
-                        }
-
-                        var bytes = System.IO.File.ReadAllBytes(contentPath);
-                        response.ContentLength64 = bytes.Length;
-                        response.OutputStream.Write(bytes, 0, bytes.Length);
-                        response.StatusCode = (int)HttpStatusCode.OK;
-                    }
+                    var ar = this.httpListener.BeginGetContext(new AsyncCallback(this.ListenerCallback), this.httpListener);
+                    requests.Add(ar.AsyncWaitHandle);
                 }
                 catch (ObjectDisposedException)
                 {
                 }
                 catch (HttpListenerException)
                 {
+                }
+            }
+
+            while (true)
+            {
+                var waitHandlesArray = waitHandles.Concat(requests).ToArray();
+                var index = WaitHandle.WaitAny(waitHandlesArray);
+
+                if (index == Array.IndexOf(waitHandlesArray, this.waitToQuit))
+                {
+                    break;
+                }
+
+                if (index == Array.IndexOf(waitHandlesArray, this.waitToListen))
+                {
+                    continue;
+                }
+
+                requests.Remove(waitHandlesArray[index]);
+
+                if (requests.Count < this.ConcurrentRequests)
+                {
+                    for (var i = requests.Count; i < this.ConcurrentRequests; i++)
+                    {
+                        try
+                        {
+                            var ar = this.httpListener.BeginGetContext(new AsyncCallback(this.ListenerCallback), this.httpListener);
+                            requests.Add(ar.AsyncWaitHandle);
+                        }
+                        catch (ObjectDisposedException)
+                        {
+                        }
+                        catch (HttpListenerException)
+                        {
+                        }
+                    }
                 }
             }
         }
