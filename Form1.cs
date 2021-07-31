@@ -40,10 +40,11 @@ namespace HttpListening
             {
                 var info = new System.Diagnostics.ProcessStartInfo
                 {
-                    FileName = "cmd.exe",
-                    Arguments = "/c start http://localhost:8080/",
+                    FileName = "rundll32.exe",
+                    Arguments = "url.dll,FileProtocolHandler http://localhost:8080/",
                     CreateNoWindow = false,
                 };
+
                 System.Diagnostics.Process.Start(info);
             };
 
