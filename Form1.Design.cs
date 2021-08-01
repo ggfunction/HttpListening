@@ -123,6 +123,12 @@ namespace HttpListening
 
             this.ComboBox1.SelectedIndexChanged += this.ComboBox1_SelectedIndexChanged;
 
+            this.NotifyIcon1 = new NotifyIcon
+            {
+                Text = Application.ProductName,
+                Icon = this.Icon,
+            };
+
             this.Controls.AddRange(new Control[] { this.Button1, this.Button2, this.Button3, this.Button4, this.Button5 });
             this.Controls.AddRange(new Control[] { this.TextBox1, this.TextBox2, this.TextBox3 });
             this.Controls.AddRange(new Control[] { this.Label1, this.Label2, this.Label3 });

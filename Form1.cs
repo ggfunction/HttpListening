@@ -32,6 +32,22 @@ namespace HttpListening
 
             this.AcceptCommandLineArgs();
             this.ResetState();
+
+            this.NotifyIcon1.Click += (s, e) =>
+            {
+                this.Visible = true;
+                this.WindowState = FormWindowState.Normal;
+                this.NotifyIcon1.Visible = false;
+            };
+
+            this.Resize += (s, e) =>
+            {
+                if (this.WindowState == FormWindowState.Minimized)
+                {
+                    this.NotifyIcon1.Visible = true;
+                    this.Visible = false;
+                }
+            };
         }
 
         private enum State
@@ -64,6 +80,8 @@ namespace HttpListening
         public Label Label3 { get; private set; }
 
         public ComboBox ComboBox1 { get; private set; }
+
+        public NotifyIcon NotifyIcon1 { get; private set; }
 
         protected override void OnFormClosed(FormClosedEventArgs e)
         {
