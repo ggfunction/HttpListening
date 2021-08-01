@@ -31,7 +31,8 @@ namespace HttpListening
             this.ContentRoot = System.IO.Directory.Exists(contentRoot) ?
                 contentRoot : Environment.CurrentDirectory;
 
-            this.Port = port > 0 ? port : this.GetFreePort();
+            this.Port = port > 0 ?
+                port : this.GetFreePort();
 
             this.httpListener = new HttpListener();
             this.httpListener.Prefixes.Add(string.Format("http://localhost:{0}/", this.Port));
@@ -100,13 +101,28 @@ namespace HttpListening
             this.waitToListen.Set();
         }
 
-        private void ListenerCallback(IAsyncResult ar)
+        private WaitHandle BeginGetContext()
         {
-            var listener = ar.AsyncState as HttpListener;
-
             try
             {
-                var context = listener.EndGetContext(ar);
+                var ar = this.httpListener.BeginGetContext(new AsyncCallback(this.ListenerCallback), null);
+                return ar.AsyncWaitHandle;
+            }
+            catch (ObjectDisposedException)
+            {
+            }
+            catch (HttpListenerException)
+            {
+            }
+
+            return new EventWaitHandle(true, EventResetMode.AutoReset);
+        }
+
+        private void ListenerCallback(IAsyncResult ar)
+        {
+            try
+            {
+                var context = this.httpListener.EndGetContext(ar);
                 var request = context.Request;
                 var response = context.Response;
 
@@ -149,6 +165,7 @@ namespace HttpListening
                 }
                 catch (System.IO.IOException)
                 {
+                    response.StatusCode = (int)HttpStatusCode.InternalServerError;
                 }
                 finally
                 {
@@ -244,21 +261,11 @@ namespace HttpListening
                 this.waitToListen,
             };
 
-            var requests = new List<WaitHandle>();
+            var requests = new HashSet<WaitHandle>();
 
             for (var i = 0; i < this.ConcurrentRequests; i++)
             {
-                try
-                {
-                    var ar = this.httpListener.BeginGetContext(new AsyncCallback(this.ListenerCallback), this.httpListener);
-                    requests.Add(ar.AsyncWaitHandle);
-                }
-                catch (ObjectDisposedException)
-                {
-                }
-                catch (HttpListenerException)
-                {
-                }
+                requests.Add(this.BeginGetContext());
             }
 
             while (true)
@@ -278,22 +285,9 @@ namespace HttpListening
 
                 requests.Remove(waitHandlesArray[index]);
 
-                if (requests.Count < this.ConcurrentRequests)
+                for (var i = requests.Count; i < this.ConcurrentRequests; i++)
                 {
-                    for (var i = requests.Count; i < this.ConcurrentRequests; i++)
-                    {
-                        try
-                        {
-                            var ar = this.httpListener.BeginGetContext(new AsyncCallback(this.ListenerCallback), this.httpListener);
-                            requests.Add(ar.AsyncWaitHandle);
-                        }
-                        catch (ObjectDisposedException)
-                        {
-                        }
-                        catch (HttpListenerException)
-                        {
-                        }
-                    }
+                    requests.Add(this.BeginGetContext());
                 }
             }
         }
