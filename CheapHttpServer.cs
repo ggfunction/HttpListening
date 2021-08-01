@@ -31,7 +31,7 @@ namespace HttpListening
             this.ContentRoot = System.IO.Directory.Exists(contentRoot) ?
                 contentRoot : Environment.CurrentDirectory;
 
-            this.Port = port > 0 ?
+            this.Port = (port > 0) && (port <= 65536) ?
                 port : this.GetFreePort();
 
             this.httpListener = new HttpListener();
