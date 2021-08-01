@@ -208,18 +208,25 @@ namespace HttpListening
         {
             return new HashSet<string>
             {
-                "text/plain",
-                "text/html",
-                "text/css",
-                "text/javascript",
-                "text/xml",
-                "image/bmp",
-                "image/png",
-                "image/jpeg",
-                "image/gif",
-                "image/webp",
                 "application/json",
-                "application/xml",
+                "application/pdf",
+                "application/rss+xml",
+                "audio/mpeg",
+                "audio/wav",
+                "image/bmp",
+                "image/gif",
+                "image/jpeg",
+                "image/png",
+                "image/webp",
+                "image/x-icon",
+                "message/rfc822",
+                "text/css",
+                "text/csv",
+                "text/html",
+                "text/javascript",
+                "text/plain",
+                "text/rtf",
+                "text/xml",
             };
         }
 
