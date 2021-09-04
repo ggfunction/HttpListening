@@ -6,7 +6,15 @@
     </head>
     <body>
         <div>
-            <h1><h1>Does not work.</h1></h1>
+            <h1>Does not work.</h1>
+        </div>
+        <div>
+            <h2><p id="q"></p></h2>
+            <script>
+                document.addEventListener('DOMContentLoaded', function() {
+                    document.getElementById('q').innerText = location.search;
+                });
+            </script>
         </div>
         <div>
             <h2>Form</h2>

@@ -141,10 +141,11 @@ namespace HttpListening
                     }
 
                     string contentPath;
+                    var requestPath = request.RawUrl.Split('?')[0];
 
-                    if (!this.TryResolvePath(request.RawUrl, out contentPath))
+                    if (!this.TryResolvePath(requestPath, out contentPath))
                     {
-                        response.StatusCode = request.RawUrl.EndsWith("/") ?
+                        response.StatusCode = requestPath.EndsWith("/") ?
                             (int)HttpStatusCode.Forbidden :
                             (int)HttpStatusCode.NotFound;
                         return;
