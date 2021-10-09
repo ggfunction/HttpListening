@@ -30,9 +30,6 @@ namespace HttpListening
                 .ToList()
                 .ForEach(x => x.TabStop = false);
 
-            this.AcceptCommandLineArgs();
-            this.ResetState();
-
             this.NotifyIcon1.Click += (s, e) =>
             {
                 this.Visible = true;
@@ -90,6 +87,8 @@ namespace HttpListening
 
         protected override void OnShown(EventArgs e)
         {
+            this.ResetState();
+            this.AcceptCommandLineArgs();
         }
 
         private void AcceptCommandLineArgs()
@@ -112,6 +111,18 @@ namespace HttpListening
             }
 
             this.TextBox2.Text = contentRoot;
+
+            var start = commandLineArgs.Any(x => x == "--start");
+            if (start)
+            {
+                this.Button2.PerformClick();
+            }
+
+            var minimized = commandLineArgs.Any(x => x == "--minimized");
+            if (minimized)
+            {
+                this.WindowState = FormWindowState.Minimized;
+            }
         }
 
         private void AppendLog(object obj, string note)
@@ -148,6 +159,7 @@ namespace HttpListening
             this.Button3.Enabled = value == State.Started;
             this.Button4.Enabled = value != State.Closed;
             this.Button5.Enabled = !(value == State.Closed);
+            this.ComboBox1.Enabled = value == State.Closed;
             this.state = value;
         }
 
